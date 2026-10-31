@@ -1,9 +1,11 @@
-// App del súper: login con Google y listas compartidas en Firestore.
+// App del súper: login con Google, listas compartidas e invitaciones.
+// La lista, los precios, las promos y el historial los dibuja el script de index.html;
+// este módulo le conecta la lista elegida con window.__conectarLista(adapter, info).
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut }
   from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, query, where, orderBy,
-  onSnapshot, addDoc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, arrayUnion, arrayRemove, deleteField,
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, query, where,
+  onSnapshot, addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch, arrayUnion, arrayRemove, deleteField,
   serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './config.js';
 
@@ -13,24 +15,31 @@ const auth = getAuth(app);
 const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 
 const $ = id => document.getElementById(id);
-const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-const cap = s => s.charAt(0).toLocaleUpperCase('es-AR') + s.slice(1);
-const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-                set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+const store = { get(k) { try { return localStorage.getItem('super-' + k); } catch (e) { return null; } },
+                set(k, v) { try { localStorage.setItem('super-' + k, v); } catch (e) {} } };
+const conectar = (a, info) => { if (window.__conectarLista) window.__conectarLista(a, info); };
 
-let user = null, listas = [], listaId = null, lista = null, items = null, q = '';
-let unsubListas = null, unsubLista = null, unsubItems = null, armed = null, armT = null;
+let user = null, listas = [], listaId = null, lista = null, unsubListas = null, unsubLista = null;
 const inviteCode = new URLSearchParams(location.search).get('c');
 
-function show(view) {
-  for (const v of ['vLoading', 'vLogin', 'vJoin', 'vApp']) $(v).hidden = v !== view;
+// Lo que el script de la página espera: collection('lista' | 'compras') con doc().set/update/delete y onSnapshot.
+function adapter(id) {
+  return {
+    collection(name) {
+      const c = collection(db, 'listas', id, name === 'lista' ? 'items' : name);
+      return {
+        doc(did) { const r = doc(c, did); return { set: d => setDoc(r, d), update: d => updateDoc(r, d), delete: () => deleteDoc(r) }; },
+        onSnapshot(next, err) { return onSnapshot(c, next, err); }
+      };
+    }
+  };
 }
+
+function show(view) { for (const v of ['vLoading', 'vLogin', 'vJoin', 'vApp']) $(v).hidden = v !== view; }
 function fail(e, where) {
   console.error(where, e);
-  const msg = e && e.code === 'permission-denied' ? 'No tenés permiso para hacer eso en esta lista.'
-    : e && e.code === 'unavailable' ? 'Sin conexión: el cambio se guarda cuando vuelva la señal.'
-    : 'Algo salió mal. Probá de nuevo.';
-  $('err').textContent = msg; setTimeout(() => { $('err').textContent = ''; }, 6000);
+  $('shErr').textContent = e && e.code === 'permission-denied' ? 'No tenés permiso para hacer eso en esta lista.' : 'Algo salió mal. Probá de nuevo.';
+  setTimeout(() => { $('shErr').textContent = ''; }, 6000);
 }
 const myName = () => (user.displayName || user.email || 'Alguien').split(' ')[0];
 
@@ -52,8 +61,8 @@ $('logout').addEventListener('click', () => signOut(auth));
 
 onAuthStateChanged(auth, async u => {
   user = u;
-  [unsubListas, unsubLista, unsubItems].forEach(f => f && f());
-  unsubListas = unsubLista = unsubItems = null; listas = []; listaId = null; lista = null; items = null;
+  if (unsubListas) unsubListas(); if (unsubLista) unsubLista();
+  unsubListas = unsubLista = null; listas = []; listaId = null; lista = null; conectar(null);
   $('who').hidden = !u;
   if (!u) {
     $('loginLead').textContent = inviteCode ? 'Te invitaron a una lista del súper. Entrá con tu cuenta de Google para sumarte.'
@@ -69,13 +78,11 @@ onAuthStateChanged(auth, async u => {
 async function startJoin(code) {
   show('vJoin'); $('joinErr').textContent = ''; $('joinYes').disabled = true;
   $('joinTitle').textContent = 'Te invitaron a una lista'; $('joinText').textContent = 'Buscando la invitación…';
-  let inv;
-  try { const s = await getDoc(doc(db, 'invitaciones', code)); inv = s.exists() ? s.data() : null; }
-  catch (e) { inv = null; }
+  let inv = null;
+  try { const s = await getDoc(doc(db, 'invitaciones', code)); inv = s.exists() ? s.data() : null; } catch (e) {}
   if (!inv) { $('joinText').textContent = 'Este link no existe o ya no sirve. Pedile a quien te lo mandó uno nuevo.'; return; }
   if (inv.vence && inv.vence.toMillis() < Date.now()) { $('joinText').textContent = 'Este link venció. Pedile a quien te lo mandó uno nuevo.'; return; }
-  // ¿ya soy miembro? Si puedo leer la lista, sí.
-  try { const ls = await getDoc(doc(db, 'listas', inv.lista)); if (ls.exists()) { leaveJoin(inv.lista); return; } } catch (e) {}
+  try { const ls = await getDoc(doc(db, 'listas', inv.lista)); if (ls.exists()) { leaveJoin(inv.lista); return; } } catch (e) {}  // ya soy miembro
   $('joinTitle').textContent = 'Te invitaron a "' + (inv.nombreLista || 'una lista') + '"';
   $('joinText').textContent = 'Si te sumás, vas a ver y editar esta lista junto con quienes ya están.';
   $('joinYes').disabled = false;
@@ -90,10 +97,7 @@ async function startJoin(code) {
     }
   };
 }
-function leaveJoin(id) {
-  history.replaceState(null, '', location.pathname);
-  store.set('lista', id); startApp(id);
-}
+function leaveJoin(id) { history.replaceState(null, '', location.pathname); store.set('lista', id); startApp(id); }
 $('joinNo').addEventListener('click', () => { history.replaceState(null, '', location.pathname); startApp(); });
 
 // ---------- listas ----------
@@ -101,8 +105,7 @@ function startApp(prefer) {
   show('vApp');
   unsubListas = onSnapshot(query(collection(db, 'listas'), where('miembros', 'array-contains', user.uid)), snap => {
     listas = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-    const want = prefer || listaId || store.get('lista');
-    prefer = null;
+    const want = prefer || listaId || store.get('lista'); prefer = null;
     renderSelector();
     const pick = listas.find(l => l.id === want) || listas[0];
     if (!pick) { openList(null); return; }
@@ -116,27 +119,23 @@ function renderSelector() {
     o.textContent = l.nombre + (l.miembros.length > 1 ? ' (compartida)' : ''); sel.appendChild(o);
   }
   sel.value = listaId || '';
-  sel.hidden = !listas.length; $('newList').hidden = !listas.length;
+  $('listSel').hidden = !listas.length; $('newList').hidden = !listas.length;
   $('noLists').hidden = !!listas.length;
 }
 $('listSel').addEventListener('change', e => openList(e.target.value));
 
 function openList(id) {
-  if (unsubLista) unsubLista(); if (unsubItems) unsubItems();
-  unsubLista = unsubItems = null; listaId = id; lista = null; items = null; q = ''; $('search').value = '';
-  $('invBox').hidden = true;
-  $('listView').hidden = !id;
-  if (!id) return;
+  if (unsubLista) unsubLista(); unsubLista = null;
+  listaId = id; lista = null; $('invBox').hidden = true; $('listView').hidden = !id;
+  if (!id) { conectar(null); return; }
   store.set('lista', id); $('listSel').value = id;
+  const l = listas.find(x => x.id === id);
+  conectar(adapter(id), { nombre: l ? l.nombre : '' });
   setDoc(doc(db, 'usuarios', user.uid), { ultima: id }, { merge: true }).catch(() => {});
   unsubLista = onSnapshot(doc(db, 'listas', id), s => {
-    if (!s.exists()) return;   // me sacaron o la borraron: la consulta de listas lo resuelve
+    if (!s.exists()) return;
     lista = { id: s.id, ...s.data() }; renderHead();
   }, () => {});
-  unsubItems = onSnapshot(query(collection(db, 'listas', id, 'items'), orderBy('o')), s => {
-    items = s.docs.map(d => ({ id: d.id, ...d.data() })); renderItems();
-  }, e => fail(e, 'items'));
-  renderItems();
 }
 
 async function newList() {
@@ -154,15 +153,15 @@ $('newList2').addEventListener('click', newList);
 function renderHead() {
   if (!lista) return;
   const owner = lista.owner === user.uid;
-  $('listName').textContent = lista.nombre;
+  if (window.__nombreLista) window.__nombreLista(lista.nombre);
   $('invite').hidden = !owner;
   $('leave').textContent = owner ? 'Borrar lista' : 'Salir de la lista';
   const m = $('members'); m.innerHTML = '';
   const names = lista.nombres || {};
-  if (lista.miembros.length < 2) { m.textContent = owner ? 'Solo vos. Tocá "Invitar" para compartirla.' : ''; return; }
+  if (lista.miembros.length < 2) { m.textContent = owner ? 'Solo vos. Tocá "Invitar a esta lista" para compartirla.' : ''; return; }
   m.append('Comparten: ');
   lista.miembros.forEach((uid, i) => {
-    const s = document.createElement('span'); s.className = 'mem';
+    const s = document.createElement('span'); s.className = 'sh-mem';
     s.append((uid === user.uid ? 'vos' : (names[uid] || 'alguien')) + (uid === lista.owner ? ' (dueño)' : ''));
     if (owner && uid !== user.uid) {
       const b = document.createElement('button'); b.type = 'button'; b.textContent = '×';
@@ -188,13 +187,15 @@ $('rename').addEventListener('click', async () => {
 $('leave').addEventListener('click', async () => {
   if (!lista) return;
   if (lista.owner === user.uid) {
-    if (!confirm('¿Borrar "' + lista.nombre + '" para todos? No se puede deshacer.')) return;
+    if (!confirm('¿Borrar "' + lista.nombre + '" para todos, con sus productos y su historial? No se puede deshacer.')) return;
     try {
-      const b = writeBatch(db);
-      (items || []).forEach(it => b.delete(doc(db, 'listas', lista.id, 'items', it.id)));
-      await b.commit();
-      await deleteDoc(doc(db, 'listas', lista.id));
-      store.set('lista', '');
+      for (const sub of ['items', 'compras']) {
+        const s = await getDocs(collection(db, 'listas', lista.id, sub));
+        for (let i = 0; i < s.docs.length; i += 400) {
+          const b = writeBatch(db); s.docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit();
+        }
+      }
+      await deleteDoc(doc(db, 'listas', lista.id)); store.set('lista', '');
     } catch (e) { fail(e, 'borrar'); }
   } else {
     if (!confirm('¿Salir de "' + lista.nombre + '"? Para volver vas a necesitar un link nuevo.')) return;
@@ -222,57 +223,5 @@ $('invite').addEventListener('click', async () => {
 });
 $('invCopy').addEventListener('click', () => {
   const t = $('invLink'); const ok = () => { $('invCopy').textContent = 'Copiado'; setTimeout(() => { $('invCopy').textContent = 'Copiar link'; }, 2000); };
-  try { navigator.clipboard.writeText(t.value).then(ok, () => { t.select(); }); } catch (e) { t.select(); }
+  try { navigator.clipboard.writeText(t.value).then(ok, () => t.select()); } catch (e) { t.select(); }
 });
-
-// ---------- productos ----------
-$('addForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  const inp = $('addInput'); const t = cap(inp.value.trim()).slice(0, 80);
-  if (!t || !listaId) return;
-  inp.value = '';
-  try { await addDoc(collection(db, 'listas', listaId, 'items'), { t, q: 1, d: false, o: Date.now(), por: user.uid }); }
-  catch (er) { fail(er, 'agregar'); }
-});
-$('search').addEventListener('input', e => { q = e.target.value.trim(); renderItems(); });
-$('clearDone').addEventListener('click', async () => {
-  const done = (items || []).filter(i => i.d); if (!done.length) return;
-  try { const b = writeBatch(db); done.forEach(i => b.delete(doc(db, 'listas', listaId, 'items', i.id))); await b.commit(); }
-  catch (e) { fail(e, 'sacar tachados'); }
-});
-
-const upd = (id, data) => updateDoc(doc(db, 'listas', listaId, 'items', id), data).catch(e => fail(e, 'editar'));
-
-function renderItems() {
-  const box = $('items'); box.innerHTML = '';
-  if (items === null) { box.className = 'list'; box.innerHTML = '<div class="nomatch">Cargando…</div>'; return; }
-  box.className = 'list' + (items.length ? '' : ' empty');
-  $('searchBox').hidden = items.length < 6;
-  $('clearDone').hidden = !items.some(i => i.d);
-  if (!items.length) { box.textContent = 'La lista está vacía. Agregá lo que hay que comprar.'; return; }
-  const nq = norm(q);
-  const shown = items.filter(i => !nq || norm(i.t).includes(nq)).sort((a, b) => (a.d - b.d) || (a.o - b.o));
-  if (!shown.length) { const d = document.createElement('div'); d.className = 'nomatch'; d.textContent = 'No hay nada que diga "' + q + '".'; box.append(d); return; }
-  for (const it of shown) {
-    const row = document.createElement('div'); row.className = 'item' + (it.d ? ' done' : '');
-    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!it.d; cb.id = 'i-' + it.id;
-    cb.setAttribute('aria-label', 'Tachar ' + it.t);
-    cb.addEventListener('change', () => {
-      upd(it.id, { d: cb.checked, dt: cb.checked ? Date.now() : 0 });
-      if (q) { q = ''; $('search').value = ''; renderItems(); }
-    });
-    const nm = document.createElement('label'); nm.className = 'name'; nm.htmlFor = cb.id; nm.textContent = it.t;
-    const qv = it.q || 1, qb = document.createElement('div'); qb.className = 'qty'; qb.setAttribute('role', 'group'); qb.setAttribute('aria-label', 'Cantidad de ' + it.t);
-    const mk = (txt, lab, dq) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.setAttribute('aria-label', lab);
-      b.disabled = qv + dq < 1 || qv + dq > 99; b.addEventListener('click', () => upd(it.id, { q: qv + dq })); return b; };
-    const n = document.createElement('span'); n.textContent = qv;
-    qb.append(mk('−', 'Uno menos', -1), n, mk('+', 'Uno más', 1));
-    const del = document.createElement('button'); del.type = 'button'; del.className = 'del' + (armed === it.id ? ' armed' : '');
-    del.textContent = armed === it.id ? '¿Borrar?' : 'Borrar';
-    del.addEventListener('click', () => {
-      if (armed !== it.id) { armed = it.id; clearTimeout(armT); armT = setTimeout(() => { armed = null; renderItems(); }, 3000); renderItems(); return; }
-      armed = null; deleteDoc(doc(db, 'listas', listaId, 'items', it.id)).catch(e => fail(e, 'borrar'));
-    });
-    row.append(cb, nm, qb, del); box.append(row);
-  }
-}
