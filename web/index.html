@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Súper</title>
+<meta name="theme-color" content="#145c43">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Public+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Súper</h1>
+    <div class="who" id="who" hidden>
+      <span id="whoName"></span>
+      <button class="link" id="logout" type="button">Salir</button>
+    </div>
+  </header>
+
+  <!-- cargando -->
+  <section id="vLoading" class="card center"><span class="muted">Cargando…</span></section>
+
+  <!-- login -->
+  <section id="vLogin" class="card center" hidden>
+    <p class="lead" id="loginLead">Entrá con tu cuenta de Google para ver tus listas.</p>
+    <button class="btn" id="login" type="button">Entrar con Google</button>
+    <p class="muted small" id="loginErr" role="alert"></p>
+  </section>
+
+  <!-- unirse con invitación -->
+  <section id="vJoin" class="card" hidden>
+    <h2 id="joinTitle">Te invitaron a una lista</h2>
+    <p id="joinText" class="muted"></p>
+    <div class="row">
+      <button class="btn" id="joinYes" type="button">Sumarme</button>
+      <button class="btn ghost" id="joinNo" type="button">Ahora no</button>
+    </div>
+    <p class="err" id="joinErr" role="alert"></p>
+  </section>
+
+  <!-- app -->
+  <section id="vApp" hidden>
+    <div class="bar">
+      <label class="sr" for="listSel">Lista</label>
+      <select id="listSel"></select>
+      <button class="btn ghost" id="newList" type="button">Nueva lista</button>
+    </div>
+
+    <div id="noLists" class="card center" hidden>
+      <p class="lead">Todavía no tenés listas.</p>
+      <p class="muted">Creá una, o pedile a alguien que te mande el link de la suya.</p>
+      <button class="btn" id="newList2" type="button">Crear mi primera lista</button>
+    </div>
+
+    <div id="listView" hidden>
+      <div class="lhead">
+        <h2 id="listName"></h2>
+        <div class="row small">
+          <button class="link" id="invite" type="button">Invitar</button>
+          <button class="link" id="rename" type="button">Renombrar</button>
+          <button class="link danger" id="leave" type="button"></button>
+        </div>
+      </div>
+      <p class="muted small" id="members"></p>
+
+      <div class="card" id="invBox" hidden>
+        <p>Mandá este link por WhatsApp. Quien lo abra entra con Google y queda en la lista. Vence en 7 días.</p>
+        <div class="row">
+          <a class="btn" id="invWa" href="#" target="_blank" rel="noopener">Mandar por WhatsApp</a>
+          <button class="btn ghost" id="invCopy" type="button">Copiar link</button>
+        </div>
+        <input id="invLink" class="mono" readonly aria-label="Link de invitación">
+      </div>
+
+      <form class="add" id="addForm">
+        <input id="addInput" placeholder="Agregar producto (ej. yerba)" autocomplete="off" autocapitalize="sentences" aria-label="Producto">
+        <button class="btn" type="submit">Agregar</button>
+      </form>
+
+      <div class="search" id="searchBox" hidden>
+        <input id="search" type="search" placeholder="Buscar en la lista para tacharlo" autocomplete="off" aria-label="Buscar en la lista">
+      </div>
+
+      <div class="list" id="items"></div>
+      <button class="btn ghost" id="clearDone" type="button" hidden>Sacar los tachados</button>
+      <p class="err" id="err" role="alert"></p>
+    </div>
+  </section>
+
+  <footer class="foot muted small">
+    <span>Precios por súper y promos: próximamente en esta app.</span>
+  </footer>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

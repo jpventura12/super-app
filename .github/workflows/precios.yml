@@ -1,4 +1,6 @@
-# Baja los precios de los 7 súpers todas las madrugadas y los publica en GitHub Pages.
+# Publica en GitHub Pages la app (web/) y los precios de los 7 súpers (cat/).
+# - De madrugada (o con "Run workflow"): baja los precios de nuevo.
+# - Cuando se sube un cambio a la app: reusa los precios ya publicados, así no hay que esperar.
 # Si algo falla, GitHub te manda un mail (Settings > Notifications > Actions).
 name: Precios del súper
 
@@ -6,6 +8,9 @@ on:
   schedule:
     - cron: "41 6 * * *"      # 03:41 en Argentina (06:41 UTC)
   workflow_dispatch:          # botón "Run workflow" para correrlo a mano
+  push:
+    branches: [main]
+    paths: ["web/**", "datos/**", ".github/workflows/**"]
 
 permissions:
   contents: read
@@ -27,14 +32,23 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Reusar los precios publicados
+        id: reusar
+        if: github.event_name == 'push'
+        continue-on-error: true
+        run: python3 precios/traer_publicado.py "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}" site
+
       - name: Bajar catálogos
+        if: github.event_name != 'push' || steps.reusar.outcome != 'success'
         run: python3 precios/catalogo_app.py site
 
       - name: Verificar
         run: python3 precios/verificar.py site
 
-      - name: Sumar promos bancarias
-        run: cp datos/bancos.json site/bancos.json
+      - name: Sumar la app y las promos bancarias
+        run: |
+          cp -r web/. site/
+          cp datos/bancos.json site/bancos.json
 
       - uses: actions/upload-pages-artifact@v3
         with:

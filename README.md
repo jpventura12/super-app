@@ -22,9 +22,23 @@ El link se guarda sin dominio; el dominio de cada súper está en `index.json` �
 
 Si un súper viene en 0 o el paso **Verificar** falla, es probable que ese súper bloquee las consultas desde los servidores de GitHub.
 
+## Etapas 2 y 3: la app (web/)
+
+App web sin build: HTML + JavaScript con Firebase por CDN. Se publica en GitHub Pages junto con los precios:
+`https://jpventura12.github.io/super-app/`
+
+- Login con Google (Firebase Authentication).
+- Listas en Firestore: cada lista tiene dueño y miembros. El dueño invita con un link que se manda por WhatsApp
+  (vence a los 7 días); quien lo abre entra con Google y queda en la lista.
+- Agregar, tachar, cantidad, buscador, borrar, sacar los tachados. Todo en tiempo real y con caché local
+  (funciona sin señal y se sincroniza después).
+- `web/config.js`: datos del proyecto de Firebase (no son secretos).
+- `firebase/firestore.rules`: reglas de la base. Se pegan en la consola: Firestore Database → Reglas → Publicar.
+  Tests en `firebase/test` (ver `firebase/README.md`).
+
+Cada cambio en `web/` se publica solo: el workflow reusa los precios ya publicados y no vuelve a consultar los súpers.
+
 ## Próximas etapas
 
-2. Proyecto Firebase y login con Google.
-3. Listas compartidas con invitación por link de WhatsApp.
 4. Comparación de precios, promos e historial de compras en la app nueva.
 5. Mudanza desde las apps de Claude.

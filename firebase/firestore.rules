@@ -1,0 +1,107 @@
+rules_version = '2';
+
+// Reglas de la app del súper.
+// - Una lista la ven y editan solo sus miembros (uids en el campo `miembros`).
+// - Solo el dueño (`owner`) borra la lista, genera invitaciones o saca gente.
+// - Para sumarse hace falta un link de invitación vigente de esa lista.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function lista(id) {
+      return get(/databases/$(database)/documents/listas/$(id)).data;
+    }
+
+    function esMiembro(id) {
+      return signedIn() && request.auth.uid in lista(id).miembros;
+    }
+
+    match /listas/{listaId} {
+      // Leer: solo miembros (sirve también para la consulta "mis listas").
+      allow read: if signedIn() && request.auth.uid in resource.data.miembros;
+
+      // Crear: el que crea es el dueño y el único miembro.
+      allow create: if signedIn()
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.miembros == [request.auth.uid]
+        && request.resource.data.nombre is string
+        && request.resource.data.nombre.size() > 0
+        && request.resource.data.nombre.size() <= 60;
+
+      // Borrar: solo el dueño.
+      allow delete: if signedIn() && resource.data.owner == request.auth.uid;
+
+      allow update: if signedIn() && (editaMiembro() || editaDueno() || seSuma() || seVa());
+
+      // Un miembro cambia el nombre de la lista o su propio nombre visible, sin tocar dueño ni miembros.
+      function editaMiembro() {
+        return request.auth.uid in resource.data.miembros
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombre', 'nombres', 'actualizada'])
+          && request.resource.data.nombre is string
+          && request.resource.data.nombre.size() > 0
+          && request.resource.data.nombre.size() <= 60;
+      }
+
+      // El dueño puede además sacar miembros (nunca a sí mismo) y no puede pasar la lista a otro.
+      function editaDueno() {
+        return resource.data.owner == request.auth.uid
+          && request.resource.data.owner == resource.data.owner
+          && request.auth.uid in request.resource.data.miembros
+          && resource.data.miembros.hasAll(request.resource.data.miembros)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombre', 'nombres', 'actualizada', 'miembros']);
+      }
+
+      // Sumarse con una invitación vigente: se agrega a sí mismo y a nadie más.
+      function seSuma() {
+        let inv = get(/databases/$(database)/documents/invitaciones/$(request.resource.data.inv)).data;
+        return !(request.auth.uid in resource.data.miembros)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['miembros', 'nombres', 'inv'])
+          && request.resource.data.miembros.hasAll(resource.data.miembros)
+          && request.resource.data.miembros.size() == resource.data.miembros.size() + 1
+          && request.auth.uid in request.resource.data.miembros
+          && inv.lista == listaId
+          && inv.vence > request.time;
+      }
+
+      // Un miembro que no es el dueño se va de la lista: se saca a sí mismo y a nadie más.
+      function seVa() {
+        return request.auth.uid in resource.data.miembros
+          && resource.data.owner != request.auth.uid
+          && !(request.auth.uid in request.resource.data.miembros)
+          && resource.data.miembros.hasAll(request.resource.data.miembros)
+          && request.resource.data.miembros.size() == resource.data.miembros.size() - 1
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['miembros', 'nombres']);
+      }
+
+      // Productos y compras: cualquier miembro.
+      match /items/{itemId} {
+        allow read, write: if esMiembro(listaId);
+      }
+      match /compras/{compraId} {
+        allow read, write: if esMiembro(listaId);
+      }
+    }
+
+    // Invitaciones: se leen sabiendo el código (no se pueden listar); las crea y borra el dueño de la lista.
+    match /invitaciones/{codigo} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && codigo.size() >= 20
+        && request.resource.data.creadaPor == request.auth.uid
+        && lista(request.resource.data.lista).owner == request.auth.uid
+        && request.resource.data.vence is timestamp
+        && request.resource.data.vence <= request.time + duration.value(8, 'd');
+      allow delete: if signedIn() && resource.data.creadaPor == request.auth.uid;
+      allow update: if false;
+    }
+
+    // Preferencias de cada usuario: solo él.
+    match /usuarios/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+  }
+}

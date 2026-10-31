@@ -1,0 +1,13 @@
+{
+  "name": "super-app-reglas",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project super-test \"node test/reglas.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase": "^10.14.1",
+    "firebase-tools": "^13.29.0"
+  }
+}
