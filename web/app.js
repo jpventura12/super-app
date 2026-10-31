@@ -38,8 +38,9 @@ function adapter(id) {
 function show(view) { for (const v of ['vLoading', 'vLogin', 'vJoin', 'vApp']) $(v).hidden = v !== view; }
 function fail(e, where) {
   console.error(where, e);
-  $('shErr').textContent = e && e.code === 'permission-denied' ? 'No tenés permiso para hacer eso en esta lista.' : 'Algo salió mal. Probá de nuevo.';
-  setTimeout(() => { $('shErr').textContent = ''; }, 6000);
+  $('shErr').textContent = e && e.code === 'permission-denied'
+    ? 'Firebase rechazó la operación (' + where + '). Si recién creaste el proyecto, revisá que las reglas estén publicadas en Firestore → Reglas.'
+    : 'Algo salió mal (' + where + ': ' + ((e && e.code) || 'error') + '). Probá de nuevo.';
 }
 const myName = () => (user.displayName || user.email || 'Alguien').split(' ')[0];
 
