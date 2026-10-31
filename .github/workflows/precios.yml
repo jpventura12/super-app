@@ -1,0 +1,51 @@
+# Baja los precios de los 7 súpers todas las madrugadas y los publica en GitHub Pages.
+# Si algo falla, GitHub te manda un mail (Settings > Notifications > Actions).
+name: Precios del súper
+
+on:
+  schedule:
+    - cron: "41 6 * * *"      # 03:41 en Argentina (06:41 UTC)
+  workflow_dispatch:          # botón "Run workflow" para correrlo a mano
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: precios
+  cancel-in-progress: false
+
+jobs:
+  armar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bajar catálogos
+        run: python3 precios/catalogo_app.py site
+
+      - name: Verificar
+        run: python3 precios/verificar.py site
+
+      - name: Sumar promos bancarias
+        run: cp datos/bancos.json site/bancos.json
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  publicar:
+    needs: armar
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
