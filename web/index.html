@@ -260,26 +260,6 @@ header h1{font-size:2.2rem}
     <input id="invLink" class="sh-mono" readonly aria-label="Link de invitación">
   </div>
 
-  <section class="section share" aria-labelledby="h-share">
-    <h2 id="h-share">Mandar o importar una lista</h2>
-    <div class="xfer">
-      <div class="row"><button class="btn ghost" id="xSendOpen" type="button">Mandar mi lista</button><button class="btn ghost" id="xImpOpen" type="button">Importar una lista</button></div>
-      <div class="xbox" id="xSend" hidden>
-        <h3>Mandar mi lista</h3>
-        <input id="xName" placeholder="Tu nombre (opcional)" autocomplete="name" aria-label="Tu nombre">
-        <span class="fine" id="xSendInfo"></span>
-        <div class="row"><a class="btn" id="xWa" href="#" target="_blank" rel="noopener">Mandar por WhatsApp</a><button class="btn ghost" id="xCopy" type="button">Copiar mensaje</button></div>
-        <textarea id="xMsg" readonly aria-label="Mensaje con tu lista" hidden></textarea>
-        <span class="fine">Va lo que todavía no tildaste. Quien la recibe la importa en su celular y desde ahí es suya: lo que cambie no te llega a vos.</span>
-      </div>
-      <div class="xbox" id="xImp" hidden>
-        <h3>Importar una lista</h3>
-        <textarea id="xPaste" placeholder="Pegá acá el mensaje con la lista que te mandaron" aria-label="Mensaje con la lista"></textarea>
-        <span class="fine" id="xImpInfo" aria-live="polite"></span>
-        <div class="row"><button class="btn" id="xAdd" type="button" disabled>Sumar a mi lista</button><button class="btn ghost" id="xRepl" type="button" disabled>Reemplazar mi lista</button></div>
-      </div>
-    </div>
-  </section>
 
   <section class="section" aria-labelledby="h-stores">
     <h2 id="h-stores">Dónde comprás</h2>
@@ -850,72 +830,6 @@ header h1{font-size:2.2rem}
   // escrituras a la lista compartida: una por vez; si falla, avisamos
   let pq=Promise.resolve();
   function pairWrite(fn){ pq=pq.then(fn).catch(e=>{ PERR='No se pudo guardar el cambio. Revisá la conexión y probá de nuevo.'+((e&&e.code)==='invalid_argument'?' Puede que ya no estés en esta lista.':''); render(); setTimeout(()=>{ PERR=''; render(); },6000); }); }
-  // mandar e importar listas (por mensaje: funciona por WhatsApp, mail o lo que sea)
-  const APP_URL=location.origin+location.pathname;
-  function sendMsg(){
-    const items=L().filter(x=>!x.d).map(x=>x.t+((x.q||1)>1?' x'+x.q:'')); const n=$('xName').value.trim(); const d=arNow();
-    return {items, text:'Lista del súper'+(n?' de '+n:'')+' ('+d.dd+'/'+d.mm+'):\n'+items.map(t=>'- '+t).join('\n')+'\n\nPara cargarla con precios y ofertas: copiá este mensaje, abrí la app Súper ('+APP_URL+'), tocá "Importar una lista" y pegalo ahí.'};
-  }
-  function sendUpdate(){
-    const m=sendMsg(); $('xSendInfo').textContent=m.items.length?m.items.length+(m.items.length===1?' producto':' productos')+' para mandar.':'No hay productos sin tildar para mandar.';
-    $('xWa').href=m.items.length?'https://wa.me/?text='+encodeURIComponent(m.text):'#'; $('xWa').setAttribute('aria-disabled',m.items.length?'false':'true'); $('xMsg').value=m.text;
-  }
-  $('xSendOpen').addEventListener('click',()=>{ $('xImp').hidden=true; $('xSend').hidden=!$('xSend').hidden; try{ $('xName').value=S.name||''; }catch(e){} sendUpdate(); });
-  $('xName').addEventListener('input',()=>{ S.name=$('xName').value.trim(); save(); sendUpdate(); });
-  $('xWa').addEventListener('click',e=>{ if($('xWa').getAttribute('aria-disabled')==='true') e.preventDefault(); });
-  $('xCopy').addEventListener('click',()=>{
-    const m=sendMsg(); if(!m.items.length) return;
-    const done=()=>{ $('xCopy').textContent='Copiado'; setTimeout(()=>{$('xCopy').textContent='Copiar mensaje';},2000); };
-    const fb=()=>{ const t=$('xMsg'); t.hidden=false; t.focus(); t.select(); $('xCopy').textContent='Copialo de acá abajo'; };
-    try{ navigator.clipboard.writeText(m.text).then(done,fb); }catch(e){ fb(); }
-  });
-  function parseList(txt){
-    const lines=String(txt||'').split(/\r?\n/).map(x=>x.trim());
-    const head=lines.find(x=>/^lista del s[uú]per/i.test(x))||''; const who=(head.match(/ de (.+?)(?: \(|:|$)/)||[])[1]||'';
-    let items=lines.filter(x=>/^[-•*]\s+/.test(x)).map(x=>x.replace(/^[-•*]\s+/,''));
-    if(!items.length) items=lines.filter(x=>x&&!/^lista del s[uú]per/i.test(x)&&!/https?:\/\//.test(x)&&!/^para verla/i.test(x)&&!/^toc[aá] este link/i.test(x)&&!/^si no se carga/i.test(x)&&!/^para cargarla/i.test(x));
-    const seen=new Set(); items=items.map(t=>t.slice(0,80).trim()).map(t=>t.charAt(0).toLocaleUpperCase('es-AR')+t.slice(1)).filter(t=>{ const k=norm(t); if(!k||seen.has(k)) return false; seen.add(k); return true; }).slice(0,200);
-    return {who,items};
-  }
-  // "Yerba x2" -> {t:'Yerba', q:2}  (solo una "x N" al final, para no confundir con "2 litros")
-  function splitQ(s){ const m=String(s).match(/^(.*?)\s*[x×]\s*(\d{1,2})$/i); return m&&m[1]?{t:m[1].trim(),q:Math.max(1,Math.min(99,+m[2]))}:{t:String(s),q:1}; }
-  function impUpdate(){
-    const r=parseList($('xPaste').value), ok=r.items.length>0;
-    $('xAdd').disabled=!ok; $('xRepl').disabled=!ok;
-    $('xImpInfo').textContent=!$('xPaste').value.trim()?'':ok?(r.items.length+(r.items.length===1?' producto':' productos')+(r.who?' de '+r.who:'')+': '+r.items.slice(0,6).join(', ')+(r.items.length>6?'…':'')):'No encontré productos en el mensaje.';
-  }
-  $('xImpOpen').addEventListener('click',()=>{ $('xSend').hidden=true; $('xImp').hidden=!$('xImp').hidden; if(!$('xImp').hidden) $('xPaste').focus(); });
-  $('xPaste').addEventListener('input',impUpdate);
-  function doImport(replace){
-    const r=parseList($('xPaste').value); if(!r.items.length) return;
-    if(PAIR){
-      if(!PDB) return;
-      const have=new Set((PL||[]).map(x=>norm(x.t)));
-      if(replace) (PL||[]).forEach(x=>pairWrite(()=>PDB.collection('lista').doc(x.id).delete()));
-      r.items.map(splitQ).filter(x=>replace||!have.has(norm(x.t))).forEach((x,k)=>{ const id=Date.now().toString(36)+k+Math.random().toString(36).slice(2,6); pairWrite(()=>PDB.collection('lista').doc(id).set({t:x.t,d:false,q:x.q,o:Date.now()+k})); });
-    } else {
-      if(S.sample||replace){ S.items=[]; S.sample=false; }
-      const have=new Set(S.items.map(x=>norm(x.t)));
-      r.items.map(splitQ).forEach(x=>{ if(!have.has(norm(x.t))){ S.items.push({t:x.t,d:false,q:x.q}); have.add(norm(x.t)); } });
-      save(); render();
-    }
-    $('xPaste').value=''; impUpdate(); $('xImpInfo').textContent=replace?'Listo: tu lista ahora es la que te mandaron.':'Listo: los sumé a tu lista (los que ya tenías no se repiten).';
-  }
-  function fromLink(){
-    let raw='';
-    try{ const h=(location.hash||'')+'&'+(location.search||''); const m=h.match(/[#?&]lista=([^&]+)/); if(m) raw=decodeURIComponent(m[1]); }catch(e){}
-    if(!raw) return;
-    try{ const d=JSON.parse(raw); const items=(Array.isArray(d.i)?d.i:[]).filter(t=>typeof t==='string').slice(0,200); if(!items.length) return;
-      const n=typeof d.n==='string'?d.n.slice(0,40):'';
-      $('xPaste').value='Lista del súper'+(n?' de '+n:'')+':\n'+items.map(t=>'- '+t).join('\n');
-      $('xSend').hidden=true; $('xImp').hidden=false; impUpdate();
-      $('xImpInfo').textContent='Te mandaron una lista. '+$('xImpInfo').textContent+'. Elegí si la sumás a la tuya o la reemplazás.';
-      try{ history.replaceState(null,'',location.pathname+location.search.replace(/([?&])lista=[^&]*&?/,'$1').replace(/[?&]$/,'')); }catch(e){}
-      setTimeout(()=>{ try{ $('xImp').scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} },300);
-    }catch(e){}
-  }
-  $('xAdd').addEventListener('click',()=>doImport(false));
-  $('xRepl').addEventListener('click',()=>{ const b=$('xRepl'); if(b.dataset.arm!=='1'){ b.dataset.arm='1'; b.textContent='¿Seguro? Se borra la tuya'; setTimeout(()=>{ b.dataset.arm=''; b.textContent='Reemplazar mi lista'; },3000); return; } b.dataset.arm=''; b.textContent='Reemplazar mi lista'; doImport(true); });
   $('clearDone').addEventListener('click',()=>{ if(!PDB||!PL) return; PL.filter(x=>x.d).forEach(x=>pairWrite(()=>PDB.collection('lista').doc(x.id).delete())); });
   $('focusOff').addEventListener('click',()=>{ FOCUS=null; render(); });
   $('clearSample').addEventListener('click',()=>{ S.items=[]; S.sample=false; save(); render(); $('newItem').focus(); });
