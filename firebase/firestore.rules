@@ -34,8 +34,6 @@ service cloud.firestore {
       // Borrar: solo el dueño.
       allow delete: if signedIn() && resource.data.owner == request.auth.uid;
 
-      allow update: if signedIn() && (editaMiembro() || editaDueno() || seSuma() || seVa());
-
       // Un miembro cambia el nombre de la lista o su propio nombre visible, sin tocar dueño ni miembros.
       function editaMiembro() {
         return request.auth.uid in resource.data.miembros
@@ -75,6 +73,8 @@ service cloud.firestore {
           && request.resource.data.miembros.size() == resource.data.miembros.size() - 1
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['miembros', 'nombres']);
       }
+
+      allow update: if signedIn() && (editaMiembro() || editaDueno() || seSuma() || seVa());
 
       // Productos y compras: cualquier miembro.
       match /items/{itemId} {
