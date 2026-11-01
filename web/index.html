@@ -696,17 +696,24 @@ header h1{font-size:2.2rem}
     $('h-adv').textContent='¿Dónde conviene hoy, '+DIAS[now.dow].toLowerCase()+' '+now.dd+'/'+now.mm+'?';
     const loading=idx.some(i=>info[i]&&info[i].loading);
     const usable=idx.filter(i=>info[i]&&!info[i].loading&&Object.keys(info[i].by).length);
-    const common=usable.filter(i=>on.every(si=>info[i].by[si]));
-    const rows=on.map(si=>{ let tot=0,n=0,miss=[],sv=0; usable.forEach(i=>{ const p=info[i].by[si]; if(p){ n++; if(p.r[4]) sv+=Math.max(0,(p.r[3]||p.r[8])-p.r[8])*(L()[i].q||1); } else miss.push(L()[i].t); }); common.forEach(i=>{ tot+=info[i].by[si].est*(L()[i].q||1); }); return {si,tot,n,miss,sv}; });
-    rows.sort((a,b)=>(common.length?a.tot-b.tot:0)||b.n-a.n);
+    // Se comparan los súpers que tienen al menos la mitad de la lista, con los productos que tienen todos ellos.
+    // Un súper que tiene pocos (o ninguno) no deja la comparación en $0: queda abajo, sin total.
+    const has=si=>usable.filter(i=>info[i].by[si]).length;
+    const part=on.filter(si=>has(si)>=Math.max(1,Math.ceil(usable.length/2)));
+    const common=usable.filter(i=>part.every(si=>info[i].by[si]));
+    const rows=on.map(si=>{ let tot=0,n=0,miss=[],sv=0; usable.forEach(i=>{ const p=info[i].by[si]; if(p){ n++; if(p.r[4]) sv+=Math.max(0,(p.r[3]||p.r[8])-p.r[8])*(L()[i].q||1); } else miss.push(L()[i].t); });
+      const inPart=part.includes(si)&&common.length>0;
+      if(inPart) common.forEach(i=>{ tot+=info[i].by[si].est*(L()[i].q||1); });
+      return {si,tot,n,miss,sv,inPart}; });
+    rows.sort((a,b)=>(b.inPart-a.inPart)||(a.inPart&&b.inPart?a.tot-b.tot:0)||b.n-a.n);
     const ol=$('rank'); ol.innerHTML='';
     rows.forEach((x,k)=>{
-      const li=document.createElement('li'); li.className=(k===0&&x.n?'win':'')+(FOCUS===x.si?' focus':'');
+      const li=document.createElement('li'); li.className=(k===0&&x.inPart?'win':'')+(FOCUS===x.si?' focus':'');
       li.tabIndex=0; li.setAttribute('role','button'); li.setAttribute('aria-pressed',FOCUS===x.si?'true':'false');
       const pick=()=>{ FOCUS=FOCUS===x.si?null:x.si; render(); if(FOCUS!==null) $('h-list').scrollIntoView({behavior:'smooth',block:'start'}); };
       li.addEventListener('click',pick); li.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(); } });
-      const st=document.createElement('span'); st.className='st'; st.textContent=(k===0&&x.n?'Conviene: ':'')+M.stores[x.si];
-      const tv=document.createElement('span'); tv.className='sv'; tv.textContent=x.n?'~'+money(x.tot):'—';
+      const st=document.createElement('span'); st.className='st'; st.textContent=(k===0&&x.inPart?'Conviene: ':'')+M.stores[x.si];
+      const tv=document.createElement('span'); tv.className='sv'; tv.textContent=x.inPart?'~'+money(x.tot):'—';
       const why=document.createElement('span'); why.className='why';
       why.textContent=x.n?(x.n+' de '+usable.length+' productos'):'No tiene ninguno de tus productos.';
       li.append(st,tv,why);
@@ -729,7 +736,7 @@ header h1{font-size:2.2rem}
       'Si podés ir a dos: comprando cada cosa donde está más barata entre '+M.stores[pair.a]+' y '+M.stores[pair.b]+' pagás ~'+money(pair.tot)+(pair.n>top.n?' y conseguís '+pair.n+' de '+usable.length:'')+'.':'';
     const m=(M.checked||'').match(/(\d{4})-(\d{2})-(\d{2})/);
     const stale=m&&(m[1]+'-'+m[2]+'-'+m[3])!==now.ymd;
-    $('advNote').textContent=(loading?'Buscando precios… ':'')+(common.length<usable.length?'Para que la comparación sea justa, el total suma solo los '+common.length+' productos que están en todos los súpers. ':'')+(stale?'Ojo: los precios son del '+m[3]+'/'+m[2]+' y pueden haber cambiado. ':'')+'Total estimado llevando 1 de cada cosa, con el producto más barato de cada súper (por kilo o litro cuando el nombre trae el tamaño). Tocá "Comparar" en cada producto para ver cuál usé. No resta las promos bancarias: las de cada súper están más abajo, en "Promos bancarias".';
+    $('advNote').textContent=(loading?'Buscando precios… ':'')+(common.length<usable.length?'Para que la comparación sea justa, el total suma solo los '+common.length+' productos que tienen todos los súpers comparados. Los súpers que tienen menos de la mitad de tu lista quedan abajo, sin total. ':'')+(stale?'Ojo: los precios son del '+m[3]+'/'+m[2]+' y pueden haber cambiado. ':'')+'Total estimado llevando 1 de cada cosa, con el producto más barato de cada súper (por kilo o litro cuando el nombre trae el tamaño). Tocá "Comparar" en cada producto para ver cuál usé. No resta las promos bancarias: las de cada súper están más abajo, en "Promos bancarias".';
     box.hidden=false;
   }
 
