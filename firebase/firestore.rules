@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Reglas de la app del súper.
+// Reglas del proyecto: app del súper y app Heladera.
 // - Una lista la ven y editan solo sus miembros (uids en el campo `miembros`).
 // - Solo el dueño (`owner`) borra la lista, genera invitaciones o saca gente.
 // - Para sumarse hace falta un link de invitación vigente de esa lista.
@@ -93,6 +93,97 @@ service cloud.firestore {
         && codigo.size() >= 20
         && request.resource.data.creadaPor == request.auth.uid
         && lista(request.resource.data.lista).owner == request.auth.uid
+        && request.resource.data.vence is timestamp
+        && request.resource.data.vence <= request.time + duration.value(8, 'd');
+      allow delete: if signedIn() && resource.data.creadaPor == request.auth.uid;
+      allow update: if false;
+    }
+
+    // ======================= App Heladera (mismo proyecto) =======================
+    // Igual que las listas: la ven y la usan solo sus miembros; el dueño (`dueno`) invita, saca gente y la borra.
+
+    function heladera(id) {
+      return get(/databases/$(database)/documents/heladeras/$(id)).data;
+    }
+
+    function enHeladera(id) {
+      return signedIn() && request.auth.uid in heladera(id).miembros;
+    }
+
+    function nombreValido(n, max) {
+      return n is string && n.size() > 0 && n.size() <= max;
+    }
+
+    match /heladeras/{hId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.miembros;
+
+      allow create: if signedIn()
+        && request.resource.data.dueno == request.auth.uid
+        && request.resource.data.miembros == [request.auth.uid]
+        && nombreValido(request.resource.data.nombre, 40);
+
+      allow delete: if signedIn() && resource.data.dueno == request.auth.uid;
+
+      function hRenombra() {
+        return request.auth.uid in resource.data.miembros
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombre', 'nombres'])
+          && nombreValido(request.resource.data.nombre, 40);
+      }
+
+      function hSacaGente() {
+        return resource.data.dueno == request.auth.uid
+          && request.resource.data.dueno == resource.data.dueno
+          && request.auth.uid in request.resource.data.miembros
+          && resource.data.miembros.hasAll(request.resource.data.miembros)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['miembros', 'nombres']);
+      }
+
+      function hSeSuma() {
+        let inv = get(/databases/$(database)/documents/invitacionesHeladera/$(request.resource.data.inv)).data;
+        return !(request.auth.uid in resource.data.miembros)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['miembros', 'nombres', 'inv'])
+          && request.resource.data.miembros.hasAll(resource.data.miembros)
+          && request.resource.data.miembros.size() == resource.data.miembros.size() + 1
+          && request.auth.uid in request.resource.data.miembros
+          && inv.heladera == hId
+          && inv.vence > request.time;
+      }
+
+      function hSeVa() {
+        return request.auth.uid in resource.data.miembros
+          && resource.data.dueno != request.auth.uid
+          && !(request.auth.uid in request.resource.data.miembros)
+          && resource.data.miembros.hasAll(request.resource.data.miembros)
+          && request.resource.data.miembros.size() == resource.data.miembros.size() - 1
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['miembros', 'nombres']);
+      }
+
+      allow update: if signedIn() && (hRenombra() || hSacaGente() || hSeSuma() || hSeVa());
+
+      // Lo que sobró: cualquier miembro lo carga, corrige o saca.
+      match /sobras/{sId} {
+        function sobraValida() {
+          let d = request.resource.data;
+          return nombreValido(d.que, 80)
+            && nombreValido(d.tupper, 60)
+            && d.guardada is timestamp
+            && d.estado in ['en-heladera', 'comida', 'tirada'];
+        }
+        allow read, delete: if enHeladera(hId);
+        allow create: if enHeladera(hId) && sobraValida() && request.resource.data.guardadaPor == request.auth.uid;
+        allow update: if enHeladera(hId) && sobraValida()
+          && request.resource.data.guardadaPor == resource.data.guardadaPor
+          && request.resource.data.guardada == resource.data.guardada;
+      }
+    }
+
+    match /invitacionesHeladera/{codigo} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && codigo.size() >= 20
+        && request.resource.data.creadaPor == request.auth.uid
+        && heladera(request.resource.data.heladera).dueno == request.auth.uid
         && request.resource.data.vence is timestamp
         && request.resource.data.vence <= request.time + duration.value(8, 'd');
       allow delete: if signedIn() && resource.data.creadaPor == request.auth.uid;
