@@ -167,7 +167,7 @@ service cloud.firestore {
           return nombreValido(d.que, 80)
             && nombreValido(d.tupper, 60)
             && d.guardada is timestamp
-            && d.estado in ['en-heladera', 'comida', 'tirada'];
+            && d.estado in ['en-heladera', 'comida', 'tirada', 'freezada'];
         }
         allow read, delete: if enHeladera(hId);
         allow create: if enHeladera(hId) && sobraValida() && request.resource.data.guardadaPor == request.auth.uid;
