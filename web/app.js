@@ -120,7 +120,7 @@ function renderSelector() {
     o.textContent = l.nombre + (l.miembros.length > 1 ? ' (compartida)' : ''); sel.appendChild(o);
   }
   sel.value = listaId || '';
-  $('listSel').hidden = !listas.length; $('newList').hidden = !listas.length;
+  $('listSel').hidden = !listas.length; $('menuBtn').hidden = !listas.length;
   $('noLists').hidden = !!listas.length;
 }
 $('listSel').addEventListener('change', e => openList(e.target.value));
@@ -226,3 +226,12 @@ $('invCopy').addEventListener('click', () => {
   const t = $('invLink'); const ok = () => { $('invCopy').textContent = 'Copiado'; setTimeout(() => { $('invCopy').textContent = 'Copiar link'; }, 2000); };
   try { navigator.clipboard.writeText(t.value).then(ok, () => t.select()); } catch (e) { t.select(); }
 });
+
+// Menú "⋯" de la lista: miembros, invitar, renombrar, nueva lista, borrar/salir.
+(() => {
+  const btn = $('menuBtn'), menu = $('shMenu');
+  const abrir = (si) => { menu.hidden = !si; btn.setAttribute('aria-expanded', String(si)); };
+  btn.addEventListener('click', e => { e.stopPropagation(); abrir(menu.hidden); });
+  menu.addEventListener('click', e => { if (e.target.closest('button')) abrir(false); });
+  document.addEventListener('click', e => { if (!menu.hidden && !menu.contains(e.target)) abrir(false); });
+})();

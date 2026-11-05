@@ -204,6 +204,39 @@ html,body{margin:0}
 .sh-mem{display:inline-flex;gap:2px;align-items:baseline}
 .sh-mem button{border:0;background:none;color:var(--sale);font:700 .85rem var(--body);cursor:pointer;padding:0 2px}
 header h1{font-size:2.2rem}
+
+/* ---- v2: lista primero, comparación en hoja ---- */
+.sh-menubtn{font-size:1.4rem;line-height:1;padding:8px 14px}
+.sh-bar{position:relative}
+.sh-menu{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px;margin-top:-10px;box-shadow:0 8px 24px rgb(0 0 0 / .12)}
+.sh-menu p{margin:0;padding:8px 10px 6px}
+.sh-mi{border:0;background:none;text-align:left;font:600 .95rem var(--body);color:var(--ink);padding:11px 10px;border-radius:8px;cursor:pointer}
+.sh-mi:hover{background:var(--surface-2)}
+.sh-mi.sh-danger{color:var(--sale)}
+.plegable{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:0 14px}
+.plegable[open]{padding-bottom:14px}
+.plegable>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:14px 0;font-weight:700;font-size:1rem}
+.plegable>summary::-webkit-details-marker{display:none}
+.plegable>summary::after{content:'›';margin-left:auto;font-size:1.3rem;color:var(--muted);transition:transform .15s}
+.plegable[open]>summary::after{transform:rotate(90deg)}
+.plegable .cuenta{font-weight:500;font-size:.85rem;color:var(--muted)}
+.plegable[open]{display:flex;flex-direction:column;gap:10px}
+details.bk,details.hist{display:block}
+details.bk[open],details.hist[open]{display:flex}
+body{padding-bottom:96px}
+.convbar{position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));z-index:20;width:min(560px,calc(100% - 24px));
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 10px;align-items:center;text-align:left;border:0;cursor:pointer;
+  background:var(--accent);color:var(--accent-ink);border-radius:14px;padding:11px 16px;box-shadow:0 8px 24px rgb(0 0 0 / .22);font-family:var(--body)}
+.convbar .cv1{font-weight:700;font-size:1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.convbar .cv2{grid-row:2;font-size:.8rem;opacity:.9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.convbar .cvgo{grid-row:1 / span 2;grid-column:2;font-size:1.6rem;line-height:1}
+.hoja{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;justify-content:flex-end}
+.hoja[hidden]{display:none}
+.hoja-fondo{position:absolute;inset:0;background:rgb(0 0 0 / .45)}
+.hoja-panel{position:relative;width:min(560px,100%);margin:0 auto;max-height:85vh;overflow:auto;background:var(--bg);border-radius:18px 18px 0 0;padding:14px 12px max(16px,env(safe-area-inset-bottom))}
+.hoja-panel .adv{border:0;padding:6px 4px}
+.hoja-cerrar{position:absolute;top:10px;right:12px;border:0;background:var(--surface-2);color:var(--ink);width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer;z-index:1}
+body.hoja-abierta{overflow:hidden}
 </style>
 </head>
 <body>
@@ -236,7 +269,14 @@ header h1{font-size:2.2rem}
   <div class="sh-bar">
     <label class="sh-sr" for="listSel">Lista</label>
     <select id="listSel"></select>
-    <button class="btn ghost" id="newList" type="button">Nueva lista</button>
+    <button class="btn ghost sh-menubtn" id="menuBtn" type="button" aria-expanded="false" aria-controls="shMenu" aria-label="Opciones de la lista">⋯</button>
+  </div>
+  <div class="sh-menu" id="shMenu" hidden>
+    <p class="sh-muted sh-small" id="members"></p>
+    <button class="sh-mi" id="invite" type="button">Invitar a esta lista</button>
+    <button class="sh-mi" id="rename" type="button">Renombrar</button>
+    <button class="sh-mi" id="newList" type="button">Nueva lista</button>
+    <button class="sh-mi sh-danger" id="leave" type="button"></button>
   </div>
 
   <div id="noLists" class="sh-card sh-center" hidden>
@@ -246,14 +286,6 @@ header h1{font-size:2.2rem}
   </div>
 
   <div id="listView" class="sh-app" hidden>
-  <div class="sh-lhead">
-    <div class="sh-row sh-small">
-      <button class="sh-link" id="invite" type="button">Invitar a esta lista</button>
-      <button class="sh-link" id="rename" type="button">Renombrar</button>
-      <button class="sh-link sh-danger" id="leave" type="button"></button>
-    </div>
-    <p class="sh-muted sh-small" id="members"></p>
-  </div>
   <div class="sh-card" id="invBox" hidden>
     <p>Mandá este link por WhatsApp. Quien lo abra entra con Google y queda en la lista. Vence en 7 días.</p>
     <div class="sh-row"><a class="btn" id="invWa" href="#" target="_blank" rel="noopener">Mandar por WhatsApp</a><button class="btn ghost" id="invCopy" type="button">Copiar link</button></div>
@@ -261,21 +293,10 @@ header h1{font-size:2.2rem}
   </div>
 
 
-  <section class="section" aria-labelledby="h-stores">
-    <h2 id="h-stores">Dónde comprás</h2>
-    <div class="chips" id="stores"></div>
-  </section>
 
-  <section class="adv" id="adv" aria-labelledby="h-adv" hidden>
-    <h2 id="h-adv">¿Dónde conviene hoy?</h2>
-    <span class="hint">Tocá un súper para ver tu lista solo ahí.</span>
-    <ol class="rank" id="rank"></ol>
-    <span class="combo" id="combo"></span>
-    <details><summary>Cómo se calcula</summary><span id="advNote"></span></details>
-  </section>
 
   <section class="section" aria-labelledby="h-list">
-    <h2 id="h-list">Tu lista</h2>
+    <h2 id="h-list" class="sh-sr">Tu lista</h2>
     <form class="add" id="add"><input id="newItem" placeholder="Agregar producto (ej. yerba, papel higiénico)" autocomplete="off" autocapitalize="sentences" aria-label="Producto"><button class="btn" type="submit">Agregar</button></form>
     <div class="peek" id="peek" aria-live="polite"></div>
     <div class="notice" id="ownNote" hidden><span id="ownText"></span></div>
@@ -288,14 +309,16 @@ header h1{font-size:2.2rem}
   </section>
 
 
-  <section class="hist" id="hist" aria-labelledby="h-hist" hidden>
-    <h2 id="h-hist">Tus compras</h2>
+
+
+
+  <details class="plegable hist" id="hist" hidden>
+    <summary><span id="h-hist">Tus compras</span></summary>
     <span class="fine">Cuando pasan 2 horas desde lo último que tachaste, lo tachado sale de la lista y queda acá como una compra. El total es estimado con los precios online del día (sin promos bancarias): elegí el súper donde compraste o cargá lo que pagaste.</span>
     <div id="histList"></div>
-  </section>
-
-  <section class="bk" id="bk" aria-labelledby="h-bk" hidden>
-    <h2 id="h-bk">Promos bancarias</h2>
+  </details>
+  <details class="plegable bk" id="bk" hidden>
+    <summary><span id="h-bk">Promos bancarias</span></summary>
     <span class="sub">Tus bancos y billeteras</span>
     <div class="chips" id="bkBanks"></div>
     <span class="fine" id="bkHint"></span>
@@ -303,7 +326,12 @@ header h1{font-size:2.2rem}
     <div class="chips" id="bkDays"></div>
     <div id="bkList" class="bkst"></div>
     <span class="fine" id="bkNote"></span>
-  </section>
+  </details>
+  <details class="plegable" id="storesBox">
+    <summary><span id="h-stores">Dónde comprás</span><span class="cuenta" id="storesCount"></span></summary>
+    <span class="sh-muted sh-small">Los súpers que se comparan. Tocá para sacar o agregar.</span>
+    <div class="chips" id="stores"></div>
+  </details>
 
   </div>
   </div>
@@ -321,6 +349,23 @@ header h1{font-size:2.2rem}
     <span>Para usarla como app: abrila en Chrome y elegí "Agregar a pantalla de inicio" en el menú.</span>
   </footer>
 </div>
+
+  <button class="convbar" id="convBar" type="button" hidden aria-controls="hoja">
+    <span class="cv1" id="cv1"></span><span class="cv2" id="cv2"></span><span class="cvgo" aria-hidden="true">›</span>
+  </button>
+  <div class="hoja" id="hoja" hidden>
+    <div class="hoja-fondo" id="hojaFondo"></div>
+    <div class="hoja-panel" role="dialog" aria-modal="true" aria-labelledby="h-adv">
+    <button class="hoja-cerrar" id="hojaCerrar" type="button" aria-label="Cerrar">✕</button>
+    <section class="adv" id="adv" aria-labelledby="h-adv" hidden>
+    <h2 id="h-adv">¿Dónde conviene hoy?</h2>
+    <span class="hint">Tocá un súper para ver tu lista solo ahí.</span>
+    <ol class="rank" id="rank"></ol>
+    <span class="combo" id="combo"></span>
+    <details><summary>Cómo se calcula</summary><span id="advNote"></span></details>
+  </section>
+    </div>
+  </div>
 
 <script>
 (function(){
@@ -691,7 +736,7 @@ header h1{font-size:2.2rem}
 
   function renderAdvice(info){
     const box=$('adv'); const idx=L().map((it,i)=>i).filter(i=>!L()[i].d);
-    if(!M||!idx.length){ box.hidden=true; return; }
+    if(!M||!idx.length){ box.hidden=true; $('convBar').hidden=true; cerrarHoja(); return; }
     const now=arNow(), on=onStores();
     $('h-adv').textContent='¿Dónde conviene hoy, '+DIAS[now.dow].toLowerCase()+' '+now.dd+'/'+now.mm+'?';
     const loading=idx.some(i=>info[i]&&info[i].loading);
@@ -710,7 +755,7 @@ header h1{font-size:2.2rem}
     rows.forEach((x,k)=>{
       const li=document.createElement('li'); li.className=(k===0&&x.inPart?'win':'')+(FOCUS===x.si?' focus':'');
       li.tabIndex=0; li.setAttribute('role','button'); li.setAttribute('aria-pressed',FOCUS===x.si?'true':'false');
-      const pick=()=>{ FOCUS=FOCUS===x.si?null:x.si; render(); if(FOCUS!==null) $('h-list').scrollIntoView({behavior:'smooth',block:'start'}); };
+      const pick=()=>{ FOCUS=FOCUS===x.si?null:x.si; cerrarHoja(); render(); if(FOCUS!==null) $('list').scrollIntoView({behavior:'smooth',block:'start'}); };
       li.addEventListener('click',pick); li.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(); } });
       const st=document.createElement('span'); st.className='st'; st.textContent=(k===0&&x.inPart?'Conviene: ':'')+M.stores[x.si];
       const tv=document.createElement('span'); tv.className='sv'; tv.textContent=x.inPart?'~'+money(x.tot):'—';
@@ -736,8 +781,15 @@ header h1{font-size:2.2rem}
       'Si podés ir a dos: comprando cada cosa donde está más barata entre '+M.stores[pair.a]+' y '+M.stores[pair.b]+' pagás ~'+money(pair.tot)+(pair.n>top.n?' y conseguís '+pair.n+' de '+usable.length:'')+'.':'';
     const m=(M.checked||'').match(/(\d{4})-(\d{2})-(\d{2})/);
     const stale=m&&(m[1]+'-'+m[2]+'-'+m[3])!==now.ymd;
-    $('advNote').textContent=(loading?'Buscando precios… ':'')+(common.length<usable.length?'Para que la comparación sea justa, el total suma solo los '+common.length+' productos que tienen todos los súpers comparados. Los súpers que tienen menos de la mitad de tu lista quedan abajo, sin total. ':'')+(stale?'Ojo: los precios son del '+m[3]+'/'+m[2]+' y pueden haber cambiado. ':'')+'Total estimado llevando 1 de cada cosa, con el producto más barato de cada súper (por kilo o litro cuando el nombre trae el tamaño). Tocá "Comparar" en cada producto para ver cuál usé. No resta las promos bancarias: las de cada súper están más abajo, en "Promos bancarias".';
+    $('advNote').textContent=(loading?'Buscando precios… ':'')+(common.length<usable.length?'Para que la comparación sea justa, el total suma solo los '+common.length+' productos que tienen todos los súpers comparados. Los súpers que tienen menos de la mitad de tu lista quedan abajo, sin total. ':'')+(stale?'Ojo: los precios son del '+m[3]+'/'+m[2]+' y pueden haber cambiado. ':'')+'Total estimado llevando 1 de cada cosa, con el producto más barato de cada súper (por kilo o litro cuando el nombre trae el tamaño). Tocá "Comparar" en cada producto para ver cuál usé. No resta las promos bancarias: las de cada súper están abajo de tu lista, en "Promos bancarias".';
     box.hidden=false;
+    // barra fija de abajo: el resumen; tocándola se abre la comparación entera
+    const enPart=rows.filter(r=>r.inPart), w=enPart[0], caro=enPart[enPart.length-1];
+    if(loading&&!w){ $('cv1').textContent='Buscando precios…'; $('cv2').textContent='Tocá para ver la comparación'; }
+    else if(w){ $('cv1').textContent='Conviene en '+M.stores[w.si]+' · ~'+money(w.tot);
+      $('cv2').textContent=(enPart.length>1&&caro.tot>w.tot?money(caro.tot-w.tot)+' menos que '+M.stores[caro.si]+' · ':'')+'ver todos los súpers'; }
+    else { $('cv1').textContent='¿Dónde conviene?'; $('cv2').textContent='Todavía no hay precios para comparar'; }
+    $('convBar').hidden=false;
   }
 
   $('add').addEventListener('submit',e=>{
@@ -839,6 +891,15 @@ header h1{font-size:2.2rem}
   function pairWrite(fn){ pq=pq.then(fn).catch(e=>{ PERR='No se pudo guardar el cambio. Revisá la conexión y probá de nuevo.'+((e&&e.code)==='invalid_argument'?' Puede que ya no estés en esta lista.':''); render(); setTimeout(()=>{ PERR=''; render(); },6000); }); }
   $('clearDone').addEventListener('click',()=>{ if(!PDB||!PL) return; PL.filter(x=>x.d).forEach(x=>pairWrite(()=>PDB.collection('lista').doc(x.id).delete())); });
   $('focusOff').addEventListener('click',()=>{ FOCUS=null; render(); });
+  function abrirHoja(){ $('hoja').hidden=false; document.body.classList.add('hoja-abierta'); $('hojaCerrar').focus(); }
+  function cerrarHoja(){ if($('hoja').hidden) return; $('hoja').hidden=true; document.body.classList.remove('hoja-abierta'); }
+  $('convBar').addEventListener('click',abrirHoja);
+  $('hojaFondo').addEventListener('click',cerrarHoja);
+  $('hojaCerrar').addEventListener('click',cerrarHoja);
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape') cerrarHoja(); });
+  // cuántos súpers se comparan, en el título plegado de "Dónde comprás"
+  new MutationObserver(()=>{ const ch=$('stores').querySelectorAll('[aria-pressed]'); const on=[...ch].filter(c=>c.getAttribute('aria-pressed')==='true').length;
+    $('storesCount').textContent=ch.length?on+' de '+ch.length:''; }).observe($('stores'),{subtree:true,childList:true,attributes:true});
   $('clearSample').addEventListener('click',()=>{ S.items=[]; S.sample=false; save(); render(); $('newItem').focus(); });
 
   // sugerencias: Gmail en una pestaña nueva, o copiar el mensaje
